@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify
 import joblib
-import numpy as np
 import shap
 import pandas as pd
 from flask_cors import CORS
@@ -12,21 +11,31 @@ CORS(app)  # Enable CORS so React can call this API
 model = joblib.load('model.pkl')
 explainer = shap.Explainer(model)
 
-# Define the API route
 @app.route('/predict', methods=['POST'])
 def predict():
-    data = request.json['features']  # Should be a list of 41 values
-    df = pd.DataFrame([data])
+    try:
+        # 1. Get features from request
+        data = request.json['features']
+        df = pd.DataFrame([data])
 
-    prediction = model.predict(df)[0]
-    shap_vals = explainer(df)
+        # 2. Make prediction
+        prediction = model.predict(df)[0]
 
-    explanation = dict(zip(df.columns, shap_vals.values[0].tolist()))
+        # 3. Get SHAP values for the predicted sample
+        shap_values = explainer(df)
+        shap_explained = shap_values.values[0]  # Already 1D for one sample
 
-    return jsonify({
-        'prediction': prediction,
-        'shap': explanation
-    })
+        # 4. Match SHAP values with feature names
+        explanation = dict(zip(df.columns, shap_explained.tolist()))
+
+        return jsonify({
+            'prediction': prediction,
+            'shap': explanation
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)
